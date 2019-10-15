@@ -37,25 +37,30 @@ my %ref_simulate_times;
 print "\n";
 print ("--------------\n");
 my $hostname = `hostname`;
+my $running_on_latedays = rindex($hostname,"compute", 0) == 0;
 print ("Running tests on $hostname\n");
 print ("--------------\n");
 
-# if (index(lc($hostname),"ghc") == -1) {
-#     $render_ref = "render_ref_latedays";
-# }
+my $nbody_ref = "nbody-ref";
+if ($running_on_latedays) {
+    $nbody_ref = "nbody-ref-latedays";
+}
 
 $length = @scene_names;
+
+my $curdir = `pwd`;
+chomp $curdir;
 
 for (my $i=0; $i < $length; $i++) {
         print ("\n**********************  Scene : @scene_names[$i]  **********************\n\n");
         $iter = @iterations[$i];
         print ("$iter Iterations \n");
 
-        process_implementation(@scene_names[$i], "MPI", "-mpi", "./nbody-release", $i);
+        process_implementation(@scene_names[$i], "MPI", "-mpi", "${curdir}/nbody-release", $i);
         print "\n";
-        process_implementation(@scene_names[$i], "MPI with Load Balancing", "-mpilb", "./nbody-release", $i);
+        process_implementation(@scene_names[$i], "MPI with Load Balancing", "-mpilb", "${curdir}/nbody-release", $i);
         print "\n";
-        process_implementation(@scene_names[$i], "Reference Sequential", "-seq", "./nbody-ref", $i);
+        process_implementation(@scene_names[$i], "Reference Sequential", "-seq", "${curdir}/${nbody_ref}", $i);
 }
 print_summary();
 
@@ -69,17 +74,21 @@ sub process_implementation {
         $iter =  @iterations[$i];
         $num_particles = $particle_nums[$i];
         $space_size = $space_sizes[$i];
-        $init_file = "./src/benchmark-files/".$scene."-init.txt";
-        $output_file = "./logs/".$scene.$type_flag.".txt";
+        $init_file = "${curdir}/src/benchmark-files/".$scene."-init.txt";
+        $output_file = "${curdir}/logs/".$scene.$type_flag.".txt";
         if ($executable eq "./nbody-ref"){
-            $output_file = "./logs/".$scene.$type_flag."-ref.txt";
+            $output_file = "${curdir}/logs/".$scene.$type_flag."-ref.txt";
         }
-        $ref_file = "./src/benchmark-files/".$scene."-ref.txt";
+        $ref_file = "${curdir}/src/benchmark-files/".$scene."-ref.txt";
         print ("$implementation_type Implementation:\n");
-        if ($executable eq "./nbody-release") {
-            $executable = "mpirun -n 8 $executable";
+        if ($executable =~ /nbody-release\z/) {
+	    if ($running_on_latedays) {
+		$executable = "mpirun -np 16 -npernode 8 --hostfile ${curdir}/hosts $executable";
+	    } else {
+		$executable = "mpirun -np 8 $executable";
+	    }
         }
-        my @sys_stdout = system ("$executable $type_flag -n $num_particles -i $iter -in $init_file -s $space_size  -o $output_file > ./logs/correctness_${scene}.log");
+        my @sys_stdout = system ("$executable $type_flag -n $num_particles -i $iter -in $init_file -s $space_size  -o $output_file > ${curdir}/logs/correctness_${scene}.log");
         my $return_value  = $?;
         if ($return_value != 0) {
             print ("Nbody Release exited with errors.!\n");
@@ -90,12 +99,12 @@ sub process_implementation {
             print ("\nCorrectness passed!\n\n");
         }
         else {
-            print ("Correctness failed ... Check ./logs/correctness_${scene}.log and compare $output_file with reference $ref_file\n");
+            print ("Correctness failed ... Check ${curdir}/logs/correctness_${scene}.log and compare $output_file with reference $ref_file\n");
             @correct[$i] = 0;
         }
-        my $your_total_time = ` grep "TOTAL TIME:" ./logs/correctness_${scene}.log`;
-        my $your_build_time = `grep "total tree construction time:" ./logs/correctness_${scene}.log`;
-        my $your_simulate_time = `grep "total simulation time:" ./logs/correctness_${scene}.log`;
+        my $your_total_time = ` grep "TOTAL TIME:" ${curdir}/logs/correctness_${scene}.log`;
+        my $your_build_time = `grep "total tree construction time:" ${curdir}/logs/correctness_${scene}.log`;
+        my $your_simulate_time = `grep "total simulation time:" ${curdir}/logs/correctness_${scene}.log`;
 
         chomp($your_total_time);
         chomp($your_build_time);
