@@ -83,7 +83,7 @@ sub process_implementation {
         print ("$implementation_type Implementation:\n");
         if ($executable =~ /nbody-release\z/) {
 	    if ($running_on_latedays) {
-		$executable = "mpirun -np 16 -npernode 8 --hostfile ${curdir}/hosts $executable";
+		$executable = "mpirun --mca btl vader,self,tcp -np 16 -npernode 8 --hostfile ${curdir}/hosts $executable";
 	    } else {
 		$executable = "mpirun -np 8 $executable";
 	    }
